@@ -1,0 +1,24 @@
+version: '3.9'
+services:
+  backend:
+    build: ./backend
+    ports:
+      - '4000:4000'
+    environment:
+      - PORT=4000
+      - HOST=0.0.0.0
+      - CLIENT_ORIGIN=http://localhost:5173,http://127.0.0.1:5173
+      - REWARD_TOKEN=demo-token
+      - BET_CHECK_INTERVAL_MS=120000
+      # - RIOT_API_KEY=your-riot-api-key
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: http://localhost:4000
+    environment:
+      - VITE_API_BASE_URL=http://backend:4000
+    ports:
+      - '5173:80'
+    depends_on:
+      - backend
