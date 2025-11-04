@@ -7,15 +7,26 @@ const { SessionManager, SESSION_DURATION_MS } = require('./sessionManager');
 
 const PORT = process.env.PORT || 4000;
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || 'http://localhost:5173';
+const allowedOrigins = CLIENT_ORIGIN.split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+const originValidator = (origin, callback) => {
+  if (!origin || allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+    callback(null, true);
+  } else {
+    callback(createError(403, 'Origin not allowed by CORS'));
+  }
+};
 
 const app = express();
-app.use(cors({ origin: CLIENT_ORIGIN, credentials: true }));
+app.use(cors({ origin: originValidator, credentials: true }));
 app.use(express.json());
 
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: CLIENT_ORIGIN,
+    origin: allowedOrigins.length > 0 ? allowedOrigins : true,
     methods: ['GET', 'POST']
   }
 });
