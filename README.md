@@ -69,7 +69,8 @@ Ouvrez ensuite http://localhost:5173.
    séparées par des virgules, par exemple `http://localhost:5173,http://192.168.1.10:5173`). Utilisez `*` pour autoriser
    temporairement toutes les origines sur un réseau de confiance.
 2. Sur le frontend, définissez `VITE_API_BASE_URL` sur l'adresse IP du serveur (`http://192.168.1.10:4000` par exemple) avant
-   `npm run dev` ou lors du build.
+   `npm run dev` ou lors du build. Si cette variable n'est pas fournie, l'interface tente automatiquement d'utiliser le même
+   nom d'hôte que la page chargée sur le port `4000` (ou `443` en HTTPS).
 3. Les autres machines ouvrent `http://192.168.1.10:5173` (ou le port exposé) et rejoignent les salons visibles.
 
 ## Workflow côté utilisateur
