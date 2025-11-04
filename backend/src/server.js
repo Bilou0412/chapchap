@@ -1,78 +1,118 @@
-const http = require('http');
 const express = require('express');
 const cors = require('cors');
+const http = require('http');
+const createError = require('http-errors');
 const { Server } = require('socket.io');
-const SessionManager = require('./sessionManager');
+const { SessionManager, SESSION_DURATION_MS } = require('./sessionManager');
+
+const PORT = process.env.PORT || 4000;
+const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || 'http://localhost:5173';
 
 const app = express();
-const port = process.env.PORT || 4000;
-const clientOrigin = process.env.CLIENT_ORIGIN || 'http://localhost:5173';
-
-app.use(cors({ origin: clientOrigin, credentials: true }));
+app.use(cors({ origin: CLIENT_ORIGIN, credentials: true }));
 app.use(express.json());
 
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: clientOrigin,
-    methods: ['GET', 'POST'],
-    credentials: true
+    origin: CLIENT_ORIGIN,
+    methods: ['GET', 'POST']
   }
 });
 
-const sessionManager = new SessionManager({ io });
-
-app.post('/session', (req, res) => {
-  const session = sessionManager.createSession();
-  res.status(201).json(session);
-});
-
-app.get('/session/:id/result', (req, res) => {
-  const result = sessionManager.getResult(req.params.id);
-  if (!result) {
-    return res.status(404).json({ message: 'Session not found or not finished yet' });
-  }
-  return res.json(result);
-});
-
-app.get('/stats/history', (req, res) => {
-  res.json({ sessions: sessionManager.getHistory() });
-});
+const sessionManager = new SessionManager();
 
 io.on('connection', (socket) => {
-  socket.on('session:join', ({ sessionId }) => {
-    if (!sessionId) {
-      socket.emit('session:error', { message: 'Session id is required' });
+  let joinedSessionId = null;
+
+  socket.on('joinSession', ({ sessionId }) => {
+    if (!sessionId) return;
+    const session = sessionManager.getSession(sessionId);
+    if (!session) {
+      socket.emit('session:error', { message: 'Session not found.' });
       return;
     }
-    sessionManager.addClient(sessionId, socket);
+    socket.join(sessionId);
+    joinedSessionId = sessionId;
+    socket.emit('session:update', session);
   });
 
-  socket.on('session:click', ({ sessionId }) => {
-    if (!sessionId) {
-      socket.emit('session:error', { message: 'Session id is required' });
-      return;
-    }
-
-    const result = sessionManager.registerClick(sessionId);
+  socket.on('click', ({ sessionId }) => {
+    if (!sessionId) return;
+    const result = sessionManager.recordClick(sessionId);
     if (!result.success) {
-      socket.emit('session:error', { message: result.reason });
+      socket.emit('session:error', { message: 'Unable to record click', reason: result.reason });
     }
   });
 
   socket.on('disconnect', () => {
-    // No-op for now, but a place to clean up resources if needed.
+    if (joinedSessionId) {
+      socket.leave(joinedSessionId);
+    }
   });
 });
 
-const start = () => {
-  server.listen(port, () => {
-    console.log(`Server listening on port ${port}`);
+sessionManager.on('sessionUpdate', (session) => {
+  io.to(session.id).emit('session:update', session);
+});
+
+sessionManager.on('sessionFinished', (session) => {
+  io.to(session.id).emit('session:finished', session);
+  io.to(session.id).emit('session:update', session);
+});
+
+app.post('/session', (req, res, next) => {
+  try {
+    const { durationMs } = req.body || {};
+    const session = sessionManager.createSession(durationMs || SESSION_DURATION_MS);
+    res.status(201).json({ sessionId: session.id, durationSeconds: Math.round(session.durationMs / 1000) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/session/:id', (req, res, next) => {
+  try {
+    const session = sessionManager.getSession(req.params.id);
+    if (!session) {
+      return next(createError(404, 'Session not found'));
+    }
+    res.json(session);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/session/:id/result', (req, res, next) => {
+  try {
+    const session = sessionManager.getSession(req.params.id);
+    if (!session) {
+      return next(createError(404, 'Session not found'));
+    }
+    if (session.status !== 'finished') {
+      return res.status(202).json({ status: 'running', message: 'Session still running', session });
+    }
+    res.json({ status: 'finished', clicks: session.clicks, durationSeconds: Math.round(session.durationMs / 1000) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.use((req, res, next) => {
+  next(createError(404, 'Not Found'));
+});
+
+app.use((err, req, res, next) => {
+  // eslint-disable-line no-unused-vars
+  res.status(err.status || 500).json({
+    message: err.message || 'Internal Server Error'
   });
-};
+});
 
-if (require.main === module) {
-  start();
-}
+server.listen(PORT, () => {
+  /* eslint-disable no-console */
+  console.log(`Server listening on port ${PORT}`);
+  /* eslint-enable no-console */
+});
 
-module.exports = { app, start, server, io };
+module.exports = { app, server, sessionManager };

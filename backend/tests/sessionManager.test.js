@@ -1,63 +1,53 @@
-const SessionManager = require('../src/sessionManager');
+const { SessionManager, SESSION_DURATION_MS } = require('../src/sessionManager');
 
 describe('SessionManager', () => {
-  beforeEach(() => {
-    jest.useFakeTimers();
-    jest.setSystemTime(new Date('2023-01-01T00:00:00Z'));
-  });
+  jest.useFakeTimers();
 
   afterEach(() => {
-    jest.useRealTimers();
+    jest.clearAllTimers();
   });
 
-  const createIoMock = () => {
-    const emit = jest.fn();
-    const io = {
-      to: jest.fn().mockReturnValue({ emit })
-    };
-    return { io, emit };
-  };
-
-  test('creates a session and counts clicks while running', () => {
-    const { io, emit } = createIoMock();
-    const manager = new SessionManager({ durationMs: 1000, tickMs: 100, io });
-
+  it('creates session with default duration and counts clicks', () => {
+    const manager = new SessionManager();
     const session = manager.createSession();
-    expect(session.status).toBe('running');
+    expect(session.durationMs).toBe(SESSION_DURATION_MS);
 
-    const clickResult = manager.registerClick(session.sessionId);
-    expect(clickResult.success).toBe(true);
-
-    const stored = manager.sessions.get(session.sessionId);
-    expect(stored.clicks).toBe(1);
-    expect(emit).toHaveBeenCalledWith('session:update', expect.objectContaining({
-      sessionId: session.sessionId,
-      clicks: 1
-    }));
-
-    manager.shutdown();
+    const result = manager.recordClick(session.id);
+    expect(result.success).toBe(true);
+    expect(result.session.clicks).toBe(1);
   });
 
-  test('stops counting once the session finishes', () => {
-    const { io } = createIoMock();
-    const manager = new SessionManager({ durationMs: 1000, tickMs: 100, io });
+  it('stops counting clicks after duration', () => {
+    const manager = new SessionManager({ tickIntervalMs: 100 });
+    const session = manager.createSession(500);
 
-    const session = manager.createSession();
+    expect(manager.recordClick(session.id).success).toBe(true);
 
-    jest.advanceTimersByTime(1100);
+    jest.advanceTimersByTime(600);
 
-    const stored = manager.sessions.get(session.sessionId);
-    expect(stored.status).toBe('finished');
+    const result = manager.recordClick(session.id);
+    expect(result.success).toBe(false);
+    expect(result.reason).toBe('FINISHED');
+  });
 
-    const clickResult = manager.registerClick(session.sessionId);
-    expect(clickResult.success).toBe(false);
-    expect(clickResult.reason).toMatch(/finished/);
+  it('emits update events on click and finish', () => {
+    const manager = new SessionManager({ tickIntervalMs: 100 });
+    const session = manager.createSession(300);
+    const updates = [];
+    const finishes = [];
 
-    const result = manager.getResult(session.sessionId);
-    expect(result).not.toBeNull();
-    expect(result.status).toBe('finished');
-    expect(result.remainingMs).toBe(0);
+    manager.on('sessionUpdate', (payload) => {
+      updates.push(payload);
+    });
 
-    manager.shutdown();
+    manager.on('sessionFinished', (payload) => {
+      finishes.push(payload);
+    });
+
+    manager.recordClick(session.id);
+    jest.advanceTimersByTime(400);
+
+    expect(updates.some((u) => u.clicks === 1)).toBe(true);
+    expect(finishes.length).toBe(1);
   });
 });

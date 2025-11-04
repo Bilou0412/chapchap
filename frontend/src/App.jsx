@@ -1,201 +1,118 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { createSocket } from './socket.js';
+import React, { useMemo, useState } from 'react';
+import { useSession } from './context/SessionContext.jsx';
+import './styles/App.scss';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
-
-const formatTime = (ms) => {
-  const totalSeconds = Math.ceil(ms / 1000);
-  const minutes = Math.floor(totalSeconds / 60)
-    .toString()
-    .padStart(2, '0');
-  const seconds = Math.max(totalSeconds % 60, 0)
-    .toString()
-    .padStart(2, '0');
+function formatTime(remainingMs) {
+  const totalSeconds = Math.max(0, Math.floor(remainingMs / 1000));
+  const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
+  const seconds = String(totalSeconds % 60).padStart(2, '0');
   return `${minutes}:${seconds}`;
-};
+}
 
-const initialState = {
-  sessionId: null,
-  status: 'idle',
-  clicks: 0,
-  remainingMs: 60000
-};
+export default function App() {
+  const { session, startSession, joinSession, recordClick, reset, error, isConnected } = useSession();
+  const [joinId, setJoinId] = useState('');
 
-function App() {
-  const [sessionId, setSessionId] = useState(initialState.sessionId);
-  const [status, setStatus] = useState(initialState.status);
-  const [clicks, setClicks] = useState(initialState.clicks);
-  const [remainingMs, setRemainingMs] = useState(initialState.remainingMs);
-  const [error, setError] = useState(null);
-  const [history, setHistory] = useState([]);
-  const socketRef = useRef(null);
+  const isRunning = session?.status === 'running';
+  const hasSession = Boolean(session?.id);
+  const clicks = session?.clicks ?? 0;
+  const timeRemaining = useMemo(() => formatTime(session?.remainingMs ?? 60000), [session?.remainingMs]);
 
-  const fetchHistory = useCallback(async () => {
+  const handleStart = async () => {
     try {
-      const response = await fetch(`${API_URL}/stats/history`);
-      if (response.ok) {
-        const data = await response.json();
-        setHistory(data.sessions);
-      }
+      await startSession();
+      setJoinId('');
     } catch (err) {
-      console.error('Failed to load history', err);
+      console.error(err); // eslint-disable-line no-console
     }
-  }, []);
+  };
 
-  useEffect(() => {
-    const socket = createSocket(API_URL);
-    socketRef.current = socket;
+  const handleReset = () => {
+    reset();
+  };
 
-    const handleUpdate = (payload) => {
-      setSessionId(payload.sessionId);
-      setStatus(payload.status);
-      setClicks(payload.clicks);
-      setRemainingMs(payload.remainingMs);
-    };
-
-    const handleFinished = (payload) => {
-      setStatus('finished');
-      setClicks(payload.clicks);
-      setRemainingMs(0);
-      fetchHistory();
-    };
-
-    const handleError = (payload) => {
-      setError(payload.message || 'Une erreur est survenue.');
-    };
-
-    socket.on('session:update', handleUpdate);
-    socket.on('session:finished', handleFinished);
-    socket.on('session:error', handleError);
-
-    fetchHistory();
-
-    return () => {
-      socket.off('session:update', handleUpdate);
-      socket.off('session:finished', handleFinished);
-      socket.off('session:error', handleError);
-      socket.disconnect();
-    };
-  }, [fetchHistory]);
-
-  useEffect(() => {
-    const socket = socketRef.current;
-    if (!socket || !sessionId) {
-      return;
-    }
-    socket.emit('session:join', { sessionId });
-  }, [sessionId]);
-
-  const startSession = useCallback(async () => {
-    setError(null);
+  const handleJoin = async (event) => {
+    event.preventDefault();
+    if (!joinId.trim()) return;
     try {
-      const response = await fetch(`${API_URL}/session`, {
-        method: 'POST'
-      });
-      if (!response.ok) {
-        throw new Error('Impossible de démarrer la session');
-      }
-      const data = await response.json();
-      setSessionId(data.sessionId);
-      setStatus(data.status);
-      setClicks(data.clicks);
-      setRemainingMs(data.remainingMs ?? data.durationMs ?? 60000);
-
-      const socket = socketRef.current;
-      if (socket) {
-        socket.emit('session:join', { sessionId: data.sessionId });
-      }
+      await joinSession(joinId.trim());
+      setJoinId('');
     } catch (err) {
-      setError(err.message);
+      console.error(err); // eslint-disable-line no-console
     }
-  }, []);
-
-  const resetSession = useCallback(() => {
-    setSessionId(initialState.sessionId);
-    setStatus(initialState.status);
-    setClicks(initialState.clicks);
-    setRemainingMs(initialState.remainingMs);
-    setError(null);
-  }, []);
-
-  const handleClick = useCallback(() => {
-    if (status !== 'running') {
-      return;
-    }
-
-    const socket = socketRef.current;
-    if (socket && sessionId) {
-      socket.emit('session:click', { sessionId });
-    }
-  }, [sessionId, status]);
-
-  const statusText = {
-    idle: 'Cliquez sur « Start » pour commencer une session de 60 secondes.',
-    running: 'Session en cours. Cliquez autant que possible pendant la minute !',
-    finished: 'Session terminée. Cliquez sur Reset pour recommencer.'
-  }[status];
+  };
 
   return (
-    <div className="app-container">
-      <header className="app-header">
+    <div className="app">
+      <header className="app__header">
         <h1>Minute Click Challenge</h1>
-        <p className="status-text">{statusText}</p>
-        {error && <p role="alert">{error}</p>}
+        <p>Appuyez sur « Start » pour démarrer une session de 60 secondes ou rejoignez une session existante.</p>
       </header>
-
-      <section>
-        <div className="timer-display" aria-live="polite">
-          {formatTime(remainingMs)}
+      <main className="app__main">
+        <div className="app__status">
+          <div className="status-card">
+            <span className="status-card__label">Temps restant</span>
+            <span className="status-card__value">{hasSession ? timeRemaining : '00:00'}</span>
+          </div>
+          <div className="status-card">
+            <span className="status-card__label">Clics</span>
+            <span className="status-card__value" data-testid="click-count">{clicks}</span>
+          </div>
         </div>
-        <div className="counter-display" aria-live="polite">
-          Total de clics : {clicks}
+
+        <form className="app__join" onSubmit={handleJoin}>
+          <label htmlFor="joinId" className="app__join-label">
+            Rejoindre une session existante
+          </label>
+          <div className="app__join-controls">
+            <input
+              id="joinId"
+              type="text"
+              placeholder="Session ID"
+              value={joinId}
+              onChange={(event) => setJoinId(event.target.value)}
+              className="input"
+            />
+            <button type="submit" className="btn" disabled={!joinId.trim()}>
+              Join
+            </button>
+          </div>
+        </form>
+
+        <div className="app__actions">
+          <button type="button" className="btn btn--primary" onClick={handleStart} disabled={isRunning}>
+            Start
+          </button>
+          <button
+            type="button"
+            className="btn btn--accent"
+            onClick={recordClick}
+            disabled={!isRunning}
+            data-testid="click-button"
+          >
+            Click!
+          </button>
+          <button type="button" className="btn" onClick={handleReset} disabled={!hasSession || isRunning}>
+            Reset
+          </button>
         </div>
-      </section>
 
-      <div className="button-group">
-        <button
-          className="primary"
-          type="button"
-          onClick={handleClick}
-          disabled={status !== 'running'}
-        >
-          Click!
-        </button>
-        <button
-          className="secondary"
-          type="button"
-          onClick={startSession}
-          disabled={status === 'running'}
-        >
-          Start
-        </button>
-        <button
-          className="secondary"
-          type="button"
-          onClick={resetSession}
-          disabled={status !== 'finished'}
-        >
-          Reset
-        </button>
-      </div>
-
-      <section className="history">
-        <h2>Sessions récentes</h2>
-        {history.length === 0 ? (
-          <p>Aucune session terminée pour le moment.</p>
-        ) : (
-          <ul>
-            {history.map((item) => (
-              <li key={item.sessionId}>
-                <strong>{item.clicks} clics</strong> — {new Date(item.finishedAt || item.startedAt).toLocaleString()}
-              </li>
-            ))}
-          </ul>
+        <div className="app__info">
+          {!isConnected && hasSession && <p className="info info--warning">Connexion temps réel en attente…</p>}
+          {session?.status === 'finished' && (
+            <p className="info info--success">
+              Session terminée ! Score final : <strong>{session.clicks}</strong> clics.
+            </p>
+          )}
+          {error && <p className="info info--error">{error}</p>}
+        </div>
+      </main>
+      <footer className="app__footer">
+        <small>Multi-utilisateur : partagez l'identifiant de session pour collaborer en temps réel.</small>
+        {session?.id && (
+          <small className="session-id" data-testid="session-id">Session ID : {session.id}</small>
         )}
-      </section>
+      </footer>
     </div>
   );
 }
-
-export default App;
-

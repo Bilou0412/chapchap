@@ -1,21 +1,18 @@
 version: '3.9'
-
 services:
-  server:
-    build: ./server
+  backend:
+    build: ./backend
     ports:
       - '4000:4000'
     environment:
       - PORT=4000
-    restart: unless-stopped
-
-  client:
+      - CLIENT_ORIGIN=http://localhost:5173
+  frontend:
     build:
-      context: ./client
+      context: ./frontend
       args:
-        VITE_API_URL: http://server:4000
+        VITE_API_BASE_URL: http://backend:4000
     ports:
-      - '3000:4173'
+      - '5173:80'
     depends_on:
-      - server
-    restart: unless-stopped
+      - backend

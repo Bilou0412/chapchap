@@ -6,19 +6,11 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/session': {
-        target: process.env.VITE_API_URL || 'http://localhost:4000',
-        changeOrigin: true
-      },
-      '/stats': {
-        target: process.env.VITE_API_URL || 'http://localhost:4000',
-        changeOrigin: true
+      '/api': {
+        target: process.env.VITE_API_BASE_URL || 'http://localhost:4000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, '')
       }
     }
-  },
-  test: {
-    globals: true,
-    environment: 'jsdom',
-    setupFiles: './vitest.setup.js'
   }
 });
