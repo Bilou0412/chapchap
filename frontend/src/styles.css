@@ -1,0 +1,127 @@
+:root {
+  font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color: #1f2933;
+  background-color: #f8fafc;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: linear-gradient(160deg, #dfe9f3 0%, #ffffff 100%);
+}
+
+#root {
+  width: 100%;
+}
+
+.app-container {
+  max-width: 420px;
+  margin: 2rem auto;
+  padding: 2.5rem 2rem;
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 20px 35px rgba(15, 23, 42, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  text-align: center;
+}
+
+.app-header h1 {
+  font-size: 2rem;
+  margin: 0 0 0.5rem;
+}
+
+.status-text {
+  font-size: 0.95rem;
+  color: #475569;
+}
+
+.timer-display {
+  font-size: 3rem;
+  font-weight: 700;
+  color: #2563eb;
+}
+
+.counter-display {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.button-group {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+button {
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+button.primary {
+  background-color: #2563eb;
+  color: #ffffff;
+}
+
+button.primary:disabled {
+  background-color: #94a3b8;
+  cursor: not-allowed;
+}
+
+button.secondary {
+  background-color: #e2e8f0;
+  color: #0f172a;
+}
+
+button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 15px rgba(37, 99, 235, 0.2);
+}
+
+.history {
+  border-top: 1px solid #e2e8f0;
+  padding-top: 1rem;
+}
+
+.history h2 {
+  font-size: 1.1rem;
+  margin-bottom: 0.75rem;
+}
+
+.history ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.history li {
+  background: #f1f5f9;
+  padding: 0.75rem;
+  border-radius: 12px;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 480px) {
+  .app-container {
+    margin: 1rem;
+    padding: 2rem 1.5rem;
+  }
+
+  .timer-display {
+    font-size: 2.5rem;
+  }
+}
