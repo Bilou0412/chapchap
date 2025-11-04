@@ -1,138 +1,95 @@
-import React from 'react';
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from '../App.jsx';
-import { SessionProvider } from '../context/SessionContext.jsx';
 
-class MockSocket {
-  constructor(roomTemplate) {
-    this.handlers = {};
-    this.roomTemplate = roomTemplate;
-    this.currentRoomId = null;
-    this.clicks = 0;
-    this.currentPlayers = roomTemplate.players || [];
-  }
+const socketMock = {
+  emit: vi.fn(),
+  on: vi.fn(),
+  disconnect: vi.fn()
+};
 
-  on(event, handler) {
-    this.handlers[event] = handler;
-    if (event === 'connect') {
-      setTimeout(() => {
-        handler();
-        const roomsHandler = this.handlers['rooms:update'];
-        if (roomsHandler) {
-          roomsHandler([this.createRoomPayload({})]);
-        }
-      }, 0);
+vi.mock('socket.io-client', () => ({
+  io: vi.fn(() => socketMock)
+}));
+
+const getMock = vi.fn();
+const postMock = vi.fn();
+
+vi.mock('../api/client', () => ({
+  createApiClient: vi.fn((userId) => {
+    if (!userId) {
+      return {
+        post: postMock
+      };
     }
-  }
-
-  emit(event, payload) {
-    if (event === 'joinRoom') {
-      this.currentRoomId = payload.roomId;
-      this.currentPlayers = [{ id: 'socket-1', name: payload.name }];
-      const room = this.createRoomPayload({ players: this.currentPlayers });
-      setTimeout(() => {
-        this.handlers['room:joined']?.(room);
-        this.handlers['room:update']?.(room);
-      }, 0);
-    }
-
-    if (event === 'click') {
-      this.clicks += 1;
-      const room = this.createRoomPayload({
-        status: 'running',
-        clicks: this.clicks,
-        remainingMs: 60000,
-        players: this.currentPlayers
-      });
-      setTimeout(() => {
-        this.handlers['room:update']?.(room);
-      }, 0);
-    }
-  }
-
-  createRoomPayload(overrides) {
-    return { ...this.roomTemplate, players: this.currentPlayers, ...overrides };
-  }
-
-  disconnect() {}
-}
+    return {
+      get: getMock,
+      post: postMock
+    };
+  }),
+  getApiBaseUrl: vi.fn(() => 'http://localhost:4000')
+}));
 
 describe('App', () => {
-  const roomTemplate = {
-    id: 'room-1',
-    name: 'Salon test',
-    status: 'waiting',
-    durationMs: 60000,
-    remainingMs: 60000,
-    clicks: 0,
-    players: []
-  };
-
   beforeEach(() => {
-    global.fetch = vi.fn((url, options) => {
-      if (url.endsWith('/rooms') && (!options || options.method === 'GET')) {
+    localStorage.clear();
+    getMock.mockReset();
+    postMock.mockReset();
+    socketMock.emit.mockClear();
+    socketMock.on.mockClear();
+    socketMock.disconnect.mockClear();
+  });
+
+  it('renders registration flow when no identity is stored', () => {
+    render(<App />);
+    expect(screen.getByText('Créez votre profil ChapChap')).toBeInTheDocument();
+  });
+
+  it('loads player profile and displays wallet when identity exists', async () => {
+    localStorage.setItem('chapchap_identity', JSON.stringify({ id: 'user-1', nickname: 'Alice' }));
+    getMock.mockImplementation((url) => {
+      if (url === '/api/me') {
         return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve([roomTemplate])
+          data: {
+            user: { id: 'user-1', nickname: 'Alice', coins: 150, riot: null },
+            transactions: []
+          }
         });
       }
-
-      if (url.endsWith('/rooms/room-1/start')) {
-        return Promise.resolve({
-          ok: true,
-          json: () =>
-            Promise.resolve({
-              ...roomTemplate,
-              status: 'running',
-              players: [{ id: 'socket-1', name: 'Alice' }]
-            })
-        });
+      if (url === '/api/bet/active') {
+        return Promise.resolve({ data: { bets: [] } });
       }
-
-      if (url.endsWith('/rooms/room-1/reset')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve(roomTemplate)
-        });
-      }
-
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({})
-      });
+      return Promise.resolve({ data: {} });
     });
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Solde')).toBeInTheDocument();
+    });
+    expect(screen.getByText('150 coins')).toBeInTheDocument();
   });
 
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
+  it('submits nickname and stores identity', async () => {
+    postMock.mockResolvedValueOnce({ data: { user: { id: 'u-1', nickname: 'PlayerOne' } } });
+    getMock.mockResolvedValue({
+      data: {
+        user: { id: 'u-1', nickname: 'PlayerOne', coins: 0, riot: null },
+        transactions: [],
+        activeBet: null,
+        bets: []
+      }
+    });
+    render(<App />);
+    const input = screen.getByPlaceholderText('Votre pseudo LAN');
+    await userEvent.type(input, 'PlayerOne');
+    const button = screen.getByRole('button', { name: 'Créer mon profil' });
+    await userEvent.click(button);
 
-  it('allows joining a room and increasing the click counter', async () => {
-    const user = userEvent.setup();
-    const socketFactory = () => new MockSocket(roomTemplate);
-
-    render(
-      <SessionProvider apiBaseUrl="http://localhost:4000" socketFactory={socketFactory}>
-        <App />
-      </SessionProvider>
-    );
-
-    await screen.findByText('Salons disponibles');
-
-    await user.type(screen.getByPlaceholderText('Entrez votre pseudo'), 'Alice');
-    await user.click(screen.getByText('Enregistrer'));
-
-    await user.click(screen.getByRole('button', { name: 'Rejoindre' }));
-
-    await waitFor(() => expect(screen.getByText('Joueurs')).toBeInTheDocument());
-
-    await user.click(screen.getByRole('button', { name: 'Start' }));
-
-    const clickButton = await screen.findByTestId('click-button');
-    await user.click(clickButton);
-
-    await waitFor(() => expect(screen.getByTestId('click-count').textContent).toBe('1'));
+    await waitFor(() => {
+      expect(postMock).toHaveBeenCalledWith('/api/auth/guest', { nickname: 'PlayerOne' });
+    });
+    const stored = JSON.parse(localStorage.getItem('chapchap_identity'));
+    expect(stored.nickname).toBe('PlayerOne');
   });
 });

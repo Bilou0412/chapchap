@@ -1,20 +1,25 @@
 const express = require('express');
 const cors = require('cors');
 const http = require('http');
-const createError = require('http-errors');
 const { Server } = require('socket.io');
-const { RoomManager } = require('./roomManager');
+const createError = require('http-errors');
+const { DataStore, sanitizeUser, sanitizeBet } = require('./dataStore');
+const { RiotService } = require('./riotService');
+const { BetService } = require('./betService');
+const { RewardService } = require('./rewardService');
 
 const PORT = process.env.PORT || 4000;
-const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || 'http://localhost:5173';
+const HOST = process.env.HOST || '0.0.0.0';
+const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || '';
+const BET_CHECK_INTERVAL_MS = Number(process.env.BET_CHECK_INTERVAL_MS || 120000);
 
 const allowedOrigins = CLIENT_ORIGIN.split(',')
   .map((origin) => origin.trim())
   .filter(Boolean);
-const allowAllOrigins = allowedOrigins.includes('*');
+const allowAllOrigins = allowedOrigins.includes('*') || allowedOrigins.length === 0;
 
 const originValidator = (origin, callback) => {
-  if (allowAllOrigins || !origin || allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+  if (allowAllOrigins || !origin || allowedOrigins.includes(origin)) {
     callback(null, true);
   } else {
     callback(createError(403, 'Origin not allowed by CORS'));
@@ -22,228 +27,237 @@ const originValidator = (origin, callback) => {
 };
 
 const app = express();
-const corsOptions = allowAllOrigins
-  ? { origin: true, credentials: true }
-  : { origin: originValidator, credentials: true };
-app.use(cors(corsOptions));
 app.use(express.json());
+app.use(cors(allowAllOrigins ? { origin: true, credentials: true } : { origin: originValidator, credentials: true }));
 
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: {
-    origin: allowAllOrigins ? true : allowedOrigins.length > 0 ? allowedOrigins : true,
-    methods: ['GET', 'POST']
-  }
-});
-
-const roomManager = new RoomManager();
-
-io.on('connection', (socket) => {
-  socket.emit('rooms:update', roomManager.listRooms());
-
-  socket.on('joinRoom', ({ roomId, name }) => {
-    const trimmedName = (name || socket.data.playerName || '').trim();
-    if (!roomId) {
-      socket.emit('room:error', { message: 'Room ID is required.' });
-      return;
-    }
-
-    if (!trimmedName) {
-      socket.emit('room:error', { message: 'Un pseudo est requis pour rejoindre une salle.' });
-      return;
-    }
-
-    socket.data.playerName = trimmedName;
-
-    if (socket.data.roomId && socket.data.roomId !== roomId) {
-      roomManager.removePlayer(socket.data.roomId, socket.id);
-      socket.leave(socket.data.roomId);
-    }
-
-    const result = roomManager.addPlayer(roomId, { id: socket.id, name: trimmedName });
-    if (!result.success) {
-      const message =
-        result.reason === 'NOT_FOUND'
-          ? "Salle introuvable."
-          : "Impossible de rejoindre la salle.";
-      socket.emit('room:error', { message });
-      return;
-    }
-
-    socket.data.roomId = roomId;
-    socket.join(roomId);
-    socket.emit('room:joined', result.room);
-  });
-
-  socket.on('leaveRoom', () => {
-    const roomId = socket.data.roomId;
-    if (!roomId) {
-      return;
-    }
-
-    roomManager.removePlayer(roomId, socket.id);
-    socket.leave(roomId);
-    socket.data.roomId = null;
-    socket.emit('room:left');
-  });
-
-  socket.on('startSession', ({ roomId }) => {
-    const targetRoomId = roomId || socket.data.roomId;
-    if (!targetRoomId) {
-      socket.emit('room:error', { message: 'Aucune salle sélectionnée.' });
-      return;
-    }
-
-    const result = roomManager.startRoom(targetRoomId);
-    if (!result.success) {
-      const messages = {
-        NOT_FOUND: 'Salle introuvable.',
-        ALREADY_RUNNING: 'La session est déjà en cours.'
-      };
-      socket.emit('room:error', { message: messages[result.reason] || 'Impossible de démarrer la session.' });
-    }
-  });
-
-  socket.on('resetSession', ({ roomId }) => {
-    const targetRoomId = roomId || socket.data.roomId;
-    if (!targetRoomId) {
-      socket.emit('room:error', { message: 'Aucune salle sélectionnée.' });
-      return;
-    }
-
-    const result = roomManager.resetRoom(targetRoomId);
-    if (!result.success) {
-      const message = result.reason === 'NOT_FOUND' ? 'Salle introuvable.' : 'Impossible de réinitialiser la session.';
-      socket.emit('room:error', { message });
-    }
-  });
-
-  socket.on('click', ({ roomId }) => {
-    const targetRoomId = roomId || socket.data.roomId;
-    if (!targetRoomId) {
-      socket.emit('room:error', { message: 'Aucune salle sélectionnée.' });
-      return;
-    }
-
-    const result = roomManager.recordClick(targetRoomId);
-    if (!result.success && result.reason !== 'NOT_RUNNING') {
-      const messages = {
-        NOT_FOUND: 'Salle introuvable.',
-        FINISHED: 'La session est terminée.'
-      };
-      socket.emit('room:error', { message: messages[result.reason] || 'Impossible d\'enregistrer le clic.' });
-    }
-  });
-
-  socket.on('disconnect', () => {
-    if (socket.data.roomId) {
-      roomManager.removePlayer(socket.data.roomId, socket.id);
-      socket.data.roomId = null;
-    }
-  });
-});
-
-roomManager.on('roomsUpdated', (rooms) => {
-  io.emit('rooms:update', rooms);
-});
-
-roomManager.on('roomUpdated', (room) => {
-  io.to(room.id).emit('room:update', room);
-});
-
-roomManager.on('roomFinished', (room) => {
-  io.to(room.id).emit('room:finished', room);
-});
-
-app.get('/rooms', (req, res) => {
-  res.json(roomManager.listRooms());
-});
-
-app.post('/rooms', (req, res, next) => {
-  try {
-    const { name, durationMs } = req.body || {};
-    const room = roomManager.createRoom({ name, durationMs });
-    res.status(201).json(room);
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.get('/rooms/:id', (req, res, next) => {
-  try {
-    const room = roomManager.getRoom(req.params.id);
-    if (!room) {
-      return next(createError(404, 'Room not found'));
-    }
-    res.json(room);
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.post('/rooms/:id/start', (req, res, next) => {
-  try {
-    const result = roomManager.startRoom(req.params.id);
-    if (!result.success) {
-      if (result.reason === 'NOT_FOUND') {
-        return next(createError(404, 'Room not found'));
+  cors: allowAllOrigins
+    ? { origin: true, credentials: true }
+    : {
+        origin: allowedOrigins,
+        credentials: true
       }
-      if (result.reason === 'ALREADY_RUNNING') {
-        return next(createError(409, 'Room already running'));
-      }
-      return next(createError(400, 'Unable to start room'));
-    }
-    res.json(result.room);
-  } catch (error) {
-    next(error);
-  }
 });
 
-app.post('/rooms/:id/reset', (req, res, next) => {
-  try {
-    const result = roomManager.resetRoom(req.params.id);
-    if (!result.success) {
-      if (result.reason === 'NOT_FOUND') {
-        return next(createError(404, 'Room not found'));
-      }
-      return next(createError(400, 'Unable to reset room'));
-    }
-    res.json(result.room);
-  } catch (error) {
-    next(error);
-  }
-});
+const store = new DataStore();
+const riotService = new RiotService({});
+const betService = new BetService({ store, riotService });
+const rewardService = new RewardService({ store });
 
-app.get('/rooms/:id/result', (req, res, next) => {
-  try {
-    const room = roomManager.getRoom(req.params.id);
-    if (!room) {
-      return next(createError(404, 'Room not found'));
-    }
-    if (room.status !== 'finished') {
-      return res.status(202).json({ status: 'running', message: 'Room is still running', room });
-    }
-    res.json({ status: 'finished', clicks: room.clicks, durationMs: room.durationMs });
-  } catch (error) {
-    next(error);
+function requireUser(req, res, next) {
+  const userId = req.header('x-user-id');
+  if (!userId) {
+    res.status(401).json({ message: 'Identifiant utilisateur manquant (x-user-id).' });
+    return;
   }
-});
+  const user = store.getUserById(userId);
+  if (!user) {
+    res.status(404).json({ message: 'Utilisateur introuvable.' });
+    return;
+  }
+  req.user = user;
+  next();
+}
 
-app.use((req, res, next) => {
-  next(createError(404, 'Not Found'));
-});
+function handleAsync(handler) {
+  return (req, res, next) => {
+    Promise.resolve(handler(req, res, next)).catch(next);
+  };
+}
+
+app.post(
+  '/api/auth/guest',
+  handleAsync((req, res) => {
+    const { nickname } = req.body || {};
+    if (!nickname || !nickname.trim()) {
+      res.status(400).json({ message: 'Le pseudo est obligatoire.' });
+      return;
+    }
+    if (store.findUserByNickname(nickname)) {
+      res.status(409).json({ message: 'Ce pseudo est déjà utilisé.' });
+      return;
+    }
+    const user = store.createUser(nickname);
+    res.status(201).json({ user });
+  })
+);
+
+app.get(
+  '/api/me',
+  requireUser,
+  handleAsync((req, res) => {
+    const user = sanitizeUser(store.getUserInternal(req.user.id));
+    const transactions = store
+      .listTransactionsForUser(req.user.id)
+      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    const activeBet = store.getActiveBetForUser(req.user.id);
+    res.json({ user, transactions, activeBet: sanitizeBet(activeBet) });
+  })
+);
+
+app.post(
+  '/api/reward',
+  requireUser,
+  handleAsync((req, res) => {
+    const { token } = req.body || {};
+    const transaction = rewardService.grantReward(req.user.id, { token });
+    res.status(201).json({ transaction, balance: store.getUserById(req.user.id).coins });
+  })
+);
+
+app.post(
+  '/api/coins/spend',
+  requireUser,
+  handleAsync((req, res) => {
+    const { amount, reason } = req.body || {};
+    const value = Number(amount);
+    if (!Number.isFinite(value) || value <= 0) {
+      res.status(400).json({ message: 'Montant invalide.' });
+      return;
+    }
+    const transaction = store.adjustCoins(req.user.id, -value, 'spend', { reason });
+    res.status(201).json({ transaction, balance: store.getUserById(req.user.id).coins });
+  })
+);
+
+app.post(
+  '/api/riot/link',
+  requireUser,
+  handleAsync(async (req, res) => {
+    const { summonerName, region } = req.body || {};
+    if (!summonerName || !region) {
+      res.status(400).json({ message: 'Le pseudo LoL et la région sont requis.' });
+      return;
+    }
+    const summoner = await riotService.fetchSummonerByName({ summonerName, region });
+    const riotProfile = {
+      puuid: summoner.puuid,
+      summonerId: summoner.id,
+      summonerName: summoner.name,
+      accountId: summoner.accountId,
+      region
+    };
+    const user = store.updateUser(req.user.id, { riot: riotProfile });
+    res.json({ user });
+  })
+);
+
+app.get(
+  '/api/bet/active',
+  handleAsync((req, res) => {
+    res.json({ bets: betService.listBets() });
+  })
+);
+
+app.post(
+  '/api/bet/create',
+  requireUser,
+  handleAsync(async (req, res) => {
+    const { opponentNickname, amount } = req.body || {};
+    if (!opponentNickname) {
+      res.status(400).json({ message: "Le pseudo de l'adversaire est requis." });
+      return;
+    }
+    const opponent = store.findUserByNickname(opponentNickname);
+    if (!opponent) {
+      res.status(404).json({ message: 'Adversaire introuvable.' });
+      return;
+    }
+    if (opponent.id === req.user.id) {
+      res.status(400).json({ message: 'Impossible de parier contre soi-même.' });
+      return;
+    }
+    const bet = await betService.createBet({ creator: req.user, opponent, amount });
+    res.status(201).json({ bet });
+  })
+);
+
+app.post(
+  '/api/bet/accept',
+  requireUser,
+  handleAsync(async (req, res) => {
+    const { betId } = req.body || {};
+    if (!betId) {
+      res.status(400).json({ message: 'Identifiant du pari requis.' });
+      return;
+    }
+    const bet = await betService.acceptBet({ betId, user: req.user });
+    res.json({ bet });
+  })
+);
+
+app.post(
+  '/api/bet/check',
+  handleAsync(async (req, res) => {
+    const updates = await betService.checkActiveBets();
+    res.json({ updates });
+  })
+);
 
 app.use((err, req, res, next) => {
   // eslint-disable-line no-unused-vars
-  res.status(err.status || 500).json({
-    message: err.message || 'Internal Server Error'
+  const status = err.status || 500;
+  res.status(status).json({ message: err.message || 'Erreur interne du serveur.' });
+});
+
+io.on('connection', (socket) => {
+  socket.emit('bets:update', betService.listBets());
+
+  socket.on('register', ({ userId }) => {
+    if (!userId) {
+      socket.emit('user:error', { message: 'Identifiant utilisateur requis.' });
+      return;
+    }
+    const user = store.getUserById(userId);
+    if (!user) {
+      socket.emit('user:error', { message: 'Utilisateur introuvable.' });
+      return;
+    }
+    socket.data.userId = userId;
+    socket.join(`user:${userId}`);
+    socket.emit('user:update', user);
   });
 });
 
-server.listen(PORT, '0.0.0.0', () => {
-  /* eslint-disable no-console */
-  console.log(`Server listening on port ${PORT}`);
-  /* eslint-enable no-console */
+store.on('userUpdated', (user) => {
+  io.to(`user:${user.id}`).emit('user:update', user);
 });
 
-module.exports = { app, server, roomManager };
+store.on('transactionCreated', (transaction) => {
+  io.to(`user:${transaction.userId}`).emit('coins:transaction', transaction);
+});
+
+store.on('betCreated', (bet) => {
+  io.emit('bet:created', bet);
+  io.emit('bets:update', betService.listBets());
+});
+
+store.on('betUpdated', (bet) => {
+  io.emit('bet:update', bet);
+  io.emit('bets:update', betService.listBets());
+});
+
+betService.on('betResolved', (bet) => {
+  io.emit('bet:result', bet);
+});
+
+betService.on('betRefunded', (bet) => {
+  io.emit('bet:refunded', bet);
+});
+
+betService.on('betCheckFailed', ({ betId, error }) => {
+  console.error(`Bet check failed for ${betId}: ${error}`); // eslint-disable-line no-console
+});
+
+if (BET_CHECK_INTERVAL_MS > 0) {
+  setInterval(() => {
+    betService.checkActiveBets().catch((error) => {
+      console.error('Bet check error:', error); // eslint-disable-line no-console
+    });
+  }, BET_CHECK_INTERVAL_MS);
+}
+
+server.listen(PORT, HOST, () => {
+  console.log(`Server listening on ${HOST}:${PORT}`); // eslint-disable-line no-console
+});
