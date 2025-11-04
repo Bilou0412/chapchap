@@ -6,7 +6,7 @@ services:
       - '4000:4000'
     environment:
       - PORT=4000
-      - CLIENT_ORIGIN=http://localhost:5173
+      - CLIENT_ORIGIN=http://localhost:5173,http://127.0.0.1:5173
   frontend:
     build:
       context: ./frontend

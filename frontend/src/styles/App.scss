@@ -4,54 +4,81 @@
   min-height: 100vh;
   padding: 2rem;
   gap: 2rem;
-  max-width: 720px;
+  max-width: 960px;
   margin: 0 auto;
 }
 
-.app__header,
-.app__footer {
-  text-align: center;
+.app__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1.5rem;
+  align-items: flex-start;
   color: #e2e8f0;
 }
 
 .app__header h1 {
   margin-bottom: 0.5rem;
-  font-size: 2.5rem;
+  font-size: 2.25rem;
+}
+
+.app__status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1.25rem;
+  border-radius: 9999px;
+  background: rgba(15, 23, 42, 0.6);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.app__status-indicator .dot {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.app__status-indicator--online {
+  color: #34d399;
+}
+
+.app__status-indicator--offline {
+  color: #f87171;
 }
 
 .app__main {
   flex: 1;
-  display: flex;
-  flex-direction: column;
+  display: grid;
   gap: 2rem;
 }
 
-.app__status {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 1rem;
-}
-
-.app__join {
-  background: rgba(15, 23, 42, 0.55);
-  border: 1px solid rgba(148, 163, 184, 0.3);
-  border-radius: 1rem;
-  padding: 1.5rem;
+.card {
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 1.25rem;
+  padding: 1.75rem;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.5);
+  color: #e2e8f0;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 1.5rem;
 }
 
-.app__join-label {
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-size: 0.75rem;
-  color: #cbd5f5;
-}
-
-.app__join-controls {
+.card__header {
   display: flex;
-  gap: 0.75rem;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.card__header h2 {
+  margin: 0;
+}
+
+.form-inline {
+  display: flex;
+  gap: 1rem;
   flex-wrap: wrap;
 }
 
@@ -61,49 +88,63 @@
   padding: 0.85rem 1rem;
   border-radius: 9999px;
   border: 1px solid rgba(148, 163, 184, 0.4);
-  background: rgba(15, 23, 42, 0.9);
+  background: rgba(15, 23, 42, 0.92);
   color: #f8fafc;
 }
 
 .input:focus {
-  outline: 2px solid rgba(59, 130, 246, 0.8);
+  outline: 2px solid rgba(59, 130, 246, 0.6);
 }
 
-.status-card {
-  background: rgba(15, 23, 42, 0.65);
-  border: 1px solid rgba(148, 163, 184, 0.25);
-  border-radius: 1rem;
-  padding: 1.5rem;
-  text-align: center;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.45);
+.helper {
+  font-size: 0.9rem;
+  color: #cbd5f5;
 }
 
-.status-card__label {
-  display: block;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-size: 0.75rem;
-  color: #94a3b8;
-}
-
-.status-card__value {
-  font-size: 2.5rem;
-  font-weight: 700;
-  margin-top: 0.5rem;
-}
-
-.app__actions {
+.rooms-list {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.room {
+  display: flex;
+  justify-content: space-between;
   gap: 1rem;
-  justify-content: center;
+  padding: 1rem 1.25rem;
+  border-radius: 1rem;
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid transparent;
+  transition: border 0.2s ease, transform 0.2s ease;
+}
+
+.room--active {
+  border-color: rgba(59, 130, 246, 0.6);
+  transform: translateY(-2px);
+}
+
+.room__main h3 {
+  margin: 0 0 0.25rem;
+}
+
+.room__meta {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.85rem;
+  color: #cbd5f5;
+}
+
+.room__actions {
+  display: flex;
+  align-items: center;
 }
 
 .btn {
-  padding: 0.9rem 2rem;
+  padding: 0.85rem 1.75rem;
   border-radius: 9999px;
   border: none;
-  font-size: 1.1rem;
+  font-size: 1rem;
+  font-weight: 600;
   cursor: pointer;
   transition: transform 0.15s ease, box-shadow 0.15s ease;
   background: #334155;
@@ -111,15 +152,15 @@
 }
 
 .btn:disabled {
-  opacity: 0.5;
+  opacity: 0.55;
   cursor: not-allowed;
-  transform: none;
   box-shadow: none;
+  transform: none;
 }
 
 .btn:not(:disabled):hover {
   transform: translateY(-2px);
-  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.35);
+  box-shadow: 0 12px 25px rgba(15, 23, 42, 0.35);
 }
 
 .btn--primary {
@@ -132,51 +173,142 @@
   color: #0f172a;
 }
 
-.app__info {
+.btn--ghost {
+  background: transparent;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+}
+
+.btn--small {
+  padding: 0.6rem 1.5rem;
+}
+
+.session {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.session__info {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.session__stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 1rem;
+}
+
+.stat {
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 1rem;
+  padding: 1.25rem;
   text-align: center;
 }
 
-.info {
-  margin: 0.5rem 0;
-  padding: 0.75rem 1rem;
-  border-radius: 0.75rem;
+.stat__label {
+  display: block;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.75rem;
+  color: #94a3b8;
 }
 
-.info--warning {
-  background: rgba(234, 179, 8, 0.15);
-  color: #facc15;
+.stat__value {
+  margin-top: 0.5rem;
+  font-size: 2.5rem;
+  font-weight: 700;
+}
+
+.session__players ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.session__players li {
+  padding: 0.5rem 1rem;
+  border-radius: 9999px;
+  background: rgba(59, 130, 246, 0.15);
+  color: #bfdbfe;
+}
+
+.session__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.session__messages {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.info {
+  margin: 0;
+  padding: 0.85rem 1rem;
+  border-radius: 0.85rem;
 }
 
 .info--success {
-  background: rgba(34, 197, 94, 0.15);
+  background: rgba(34, 197, 94, 0.18);
   color: #4ade80;
 }
 
 .info--error {
-  background: rgba(248, 113, 113, 0.15);
-  color: #f87171;
+  background: rgba(248, 113, 113, 0.18);
+  color: #fca5a5;
 }
 
-.session-id {
-  display: block;
-  margin-top: 0.5rem;
+.empty {
+  margin: 0;
+  color: #cbd5f5;
+}
+
+.app__footer {
+  text-align: center;
   color: #94a3b8;
 }
 
-@media (max-width: 600px) {
+@media (min-width: 900px) {
+  .app__main {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .card--session {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 640px) {
   .app {
     padding: 1.5rem 1rem;
   }
 
-  .app__join-controls {
+  .app__header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .form-inline {
     flex-direction: column;
   }
 
-  .app__join-controls .btn {
+  .form-inline .btn,
+  .form-inline .input {
     width: 100%;
   }
 
-  .status-card__value {
-    font-size: 2rem;
+  .session__actions {
+    flex-direction: column;
+  }
+
+  .session__actions .btn {
+    width: 100%;
   }
 }
