@@ -1,0 +1,28 @@
+{
+  "name": "click-counter-server",
+  "version": "1.0.0",
+  "description": "Backend for the minute click challenge application",
+  "main": "src/server.js",
+  "type": "commonjs",
+  "scripts": {
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js",
+    "test": "jest --runInBand"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "helmet": "^7.0.0",
+    "socket.io": "^4.7.5",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "nodemon": "^3.0.2"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "roots": ["<rootDir>/tests"],
+    "collectCoverageFrom": ["src/**/*.js"]
+  }
+}

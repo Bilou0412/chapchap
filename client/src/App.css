@@ -1,0 +1,147 @@
+.app {
+  margin: 0 auto;
+  padding: 2rem;
+  max-width: 640px;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: #1f2933;
+}
+
+.app__header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.app__header h1 {
+  margin-bottom: 0.5rem;
+}
+
+.app__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: center;
+  margin-bottom: 1.5rem;
+}
+
+.app__controls button,
+.app__controls input {
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  border: 1px solid #d0d7de;
+  font-size: 1rem;
+}
+
+.app__controls button.primary {
+  background: #2563eb;
+  color: #fff;
+  border-color: #2563eb;
+  min-width: 120px;
+}
+
+.app__controls button.secondary {
+  background: #f3f4f6;
+}
+
+.app__controls button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.join-form {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.join-form input {
+  min-width: 180px;
+}
+
+.app__status {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.status-card {
+  background: #f9fafb;
+  border-radius: 1rem;
+  padding: 1rem;
+  text-align: center;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
+}
+
+.status-card .label {
+  display: block;
+  font-size: 0.9rem;
+  color: #64748b;
+  margin-bottom: 0.5rem;
+}
+
+.status-card .value {
+  font-size: 2rem;
+  font-weight: 600;
+}
+
+.status-card .value--mono {
+  font-family: 'Roboto Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-size: 1rem;
+  word-break: break-all;
+}
+
+.click-button {
+  display: block;
+  width: 100%;
+  padding: 1.25rem;
+  font-size: 1.5rem;
+  font-weight: bold;
+  background: linear-gradient(135deg, #f97316, #ea580c);
+  color: white;
+  border: none;
+  border-radius: 1rem;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.click-button:disabled {
+  cursor: not-allowed;
+  background: #cbd5f5;
+  color: #1f2933;
+}
+
+.click-button:not(:disabled):active {
+  transform: scale(0.98);
+  box-shadow: inset 0 3px 6px rgba(0, 0, 0, 0.2);
+}
+
+.alert {
+  background: #fee2e2;
+  color: #b91c1c;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.result {
+  margin-top: 2rem;
+  text-align: center;
+  background: #ecfdf5;
+  padding: 1.5rem;
+  border-radius: 1rem;
+  border: 1px solid #a7f3d0;
+}
+
+@media (max-width: 600px) {
+  .app {
+    padding: 1.5rem 1rem;
+  }
+
+  .join-form {
+    flex-direction: column;
+  }
+
+  .join-form input,
+  .join-form button {
+    width: 100%;
+  }
+}
