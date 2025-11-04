@@ -1,0 +1,12 @@
+FROM node:18-alpine AS base
+WORKDIR /app
+
+COPY backend/package*.json ./
+RUN npm install --production
+
+COPY backend/. .
+
+ENV PORT=4000
+EXPOSE 4000
+
+CMD ["npm", "start"]
