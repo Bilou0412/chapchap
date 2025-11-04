@@ -1,24 +1,21 @@
 version: '3.9'
 
 services:
-  backend:
-    build:
-      context: .
-      dockerfile: Dockerfile.backend
-    environment:
-      - PORT=4000
-      - CLIENT_ORIGIN=http://localhost:5173
+  server:
+    build: ./server
     ports:
       - '4000:4000'
-  frontend:
-    build:
-      context: .
-      dockerfile: Dockerfile.frontend
-      args:
-        VITE_API_URL: http://backend:4000
     environment:
-      - VITE_API_URL=http://backend:4000
+      - PORT=4000
+    restart: unless-stopped
+
+  client:
+    build:
+      context: ./client
+      args:
+        VITE_API_URL: http://server:4000
     ports:
-      - '5173:5173'
+      - '3000:4173'
     depends_on:
-      - backend
+      - server
+    restart: unless-stopped

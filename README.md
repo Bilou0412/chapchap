@@ -1,115 +1,136 @@
 # Minute Click Challenge
 
-Application full-stack (React + Express + Socket.IO) permettant de compter en temps réel le nombre de clics réalisés en 60 secondes.
+Application full-stack pour compter le nombre de clics effectués pendant une minute. Elle se compose d'un backend Node.js/Express utilisant Socket.IO pour la communication temps réel et d'un frontend React (Vite) affichant le compteur en direct.
 
-## Structure du projet
+## Fonctionnalités principales
+
+- Création d'une session de 60 secondes avec identifiant unique.
+- Clics enregistrés côté serveur pour garantir l'intégrité des scores.
+- Diffusion temps réel du nombre de clics et du temps restant via WebSocket (Socket.IO).
+- Interface responsive : bouton « Click! », affichage du temps restant, compteur total et identifiant de session à partager.
+- Possibilité de rejoindre une session existante à partir de son identifiant.
+- Historique en mémoire des dernières sessions terminées (endpoint `GET /stats/recent`).
+- Tests unitaires côté backend (Jest) et tests UI côté frontend (React Testing Library + Vitest).
+
+## Arborescence
 
 ```
 .
-├── backend
-│   ├── src
-│   │   ├── server.js          # Serveur Express + Socket.IO
-│   │   └── sessionManager.js  # Gestion des sessions, timer et clics
-│   ├── tests
-│   │   └── sessionManager.test.js
-│   ├── package.json
-│   └── jest.config.js
-├── frontend
-│   ├── src
-│   │   ├── App.jsx            # Interface principale React
-│   │   ├── App.test.jsx       # Test RTL vérifiant l'incrémentation
-│   │   ├── main.jsx
-│   │   ├── socket.js          # Factory Socket.IO client
-│   │   └── styles.css
-│   ├── package.json
-│   ├── vite.config.js
-│   └── vitest.setup.js
-├── docker-compose.yml
-├── Dockerfile.backend
-├── Dockerfile.frontend
+├── client/                # Frontend React + Vite
+│   ├── src/
+│   │   ├── App.jsx        # Composant principal de l'interface
+│   │   ├── session/       # Contexte et logique de connexion Socket.IO
+│   │   └── __tests__/     # Tests React Testing Library
+│   └── Dockerfile         # Image de build + serveur statique
+├── server/                # Backend Express + Socket.IO
+│   ├── src/
+│   │   ├── server.js      # Initialisation HTTP, routes REST et Socket.IO
+│   │   └── sessionManager.js # Gestion des sessions, timer et compteur
+│   ├── tests/             # Tests Jest
+│   └── Dockerfile         # Image Node.js pour le serveur
+├── docker-compose.yml     # Lancement coordonné front + back
 └── README.md
 ```
 
-## Installation
+## Pré-requis
 
-### Pré-requis
 - Node.js 18+
-- npm ou yarn
+- npm 9+
+- (Optionnel) Docker et Docker Compose
+
+## Installation & lancement en développement
 
 ### Backend
+
 ```bash
-cd backend
+cd server
 npm install
 npm run dev
 ```
-Le serveur écoute sur [http://localhost:4000](http://localhost:4000).
+
+Le serveur écoute par défaut sur `http://localhost:4000`.
 
 ### Frontend
+
+Dans un autre terminal :
+
 ```bash
-cd frontend
+cd client
 npm install
-npm run dev
+npm run dev -- --host 0.0.0.0
 ```
-L'application est accessible sur [http://localhost:5173](http://localhost:5173).
 
-Le frontend communique avec le backend via WebSocket (`socket.io`) et REST. Par défaut, l'URL de l'API est `http://localhost:4000`. Vous pouvez la surcharger avec la variable d'environnement `VITE_API_URL` côté frontend et `CLIENT_ORIGIN` côté backend.
-
-## Fonctionnement
-1. L'utilisateur clique sur « Start » pour démarrer une session de 60 secondes.
-2. Le backend crée une session, lance un timer et renvoie l'identifiant unique.
-3. Chaque clic sur « Click! » émet un évènement WebSocket `session:click` vers le serveur.
-4. Le serveur compte les clics, publie les mises à jour (`session:update`) et stoppe automatiquement la session après 60 s (`session:finished`).
-5. Le frontend met à jour l'UI en temps réel et permet un `Reset` lorsque la session est terminée.
-6. Les sessions terminées sont conservées en mémoire et exposées via `/stats/history`.
+L'interface est accessible sur `http://localhost:5173`. Assurez-vous que la variable d'environnement `VITE_API_URL` pointe vers l'API backend (par défaut `http://localhost:4000`).
 
 ## Tests
 
-### Backend
+### Backend (Jest)
+
 ```bash
-cd backend
+cd server
 npm test
 ```
-Test de la logique de session (timing et comptage) avec Jest.
+
+Les tests vérifient la création d'une session, l'incrément des clics et le blocage du compteur à la fin de la minute.
+
+### Frontend (Vitest + React Testing Library)
+
+```bash
+cd client
+npm test
+```
+
+Le test simule un clic utilisateur et vérifie que le compteur affiché augmente.
+
+## Build de production
+
+### Backend
+
+```bash
+cd server
+npm install --production
+npm start
+```
 
 ### Frontend
-```bash
-cd frontend
-npm test
-```
-Test React Testing Library + Vitest qui vérifie que le compteur affiché augmente après un clic (via une mise à jour du serveur simulée).
 
-## Docker
-
-### Construction individuelle
 ```bash
-# Backend
-docker build -t click-counter-backend -f Dockerfile.backend .
-# Frontend
-docker build -t click-counter-frontend -f Dockerfile.frontend .
+cd client
+npm install
+npm run build
+npm run preview
 ```
 
-### docker-compose
+`npm run preview` lance un serveur statique (port 4173) afin de tester le bundle.
+
+## Lancement via Docker
+
+Construisez et lancez les services :
+
 ```bash
 docker-compose up --build
 ```
-- Backend exposé sur le port `4000`
-- Frontend exposé sur le port `5173`
 
-## Points d'extension
-- **Persistance** : brancher un stockage (Redis, base SQL) en implémentant un nouveau store pour `SessionManager`.
-- **Authentification** : protéger l'accès aux sessions, permettre des tableaux de scores par utilisateur.
-- **Analytics** : stocker les résultats et produire des statistiques (moyenne, meilleurs scores, etc.).
-- **Scalabilité** : utiliser un adaptateur Socket.IO (Redis, NATS) pour gérer plusieurs instances de serveur.
-- **Observabilité** : exposer des métriques Prometheus et des logs structurés.
+- Frontend disponible sur [http://localhost:3000](http://localhost:3000)
+- Backend disponible sur [http://localhost:4000](http://localhost:4000)
 
-## API
-- `POST /session` : crée une nouvelle session et retourne l'état initial.
-- `GET /session/:id/result` : renvoie le résultat d'une session terminée.
-- `GET /stats/history` : liste des sessions terminées (en mémoire).
+## API REST
 
-## Sécurité & bonnes pratiques
-- Comptage des clics côté serveur uniquement.
-- Sessions identifiées par UUID, timer strict côté serveur.
-- Nettoyage des timers via `shutdown()` pour éviter les fuites mémoire (utilisé dans les tests et réutilisable pour des scripts d'arrêt).
+- `POST /session` : démarre une nouvelle session de 60 secondes et renvoie ses métadonnées (`sessionId`, `status`, `remainingSeconds`, etc.).
+- `GET /session/:id/result` : retourne le score final quand la session est terminée (code 202 si elle est toujours en cours, 404 si inconnue).
+- `GET /stats/recent` : liste les dernières sessions complétées (en mémoire).
 
-Bon clic !
+## Extension possibles
+
+- **Stockage persistant** : remplacer la mémoire par Redis ou une base de données pour conserver l'historique.
+- **Authentification** : associer un utilisateur à chaque session pour suivre les performances individuelles.
+- **Analytics** : tracer la cadence des clics et exporter les données.
+- **Déploiement cloud** : ajouter des fichiers de configuration pour déployer sur Fly.io, Render, Railway, etc.
+
+## Sécurité et bonnes pratiques
+
+- Les clics sont validés côté serveur uniquement.
+- CORS limité via la variable d'environnement `CLIENT_ORIGIN` pour le backend.
+- Possibilité d'ajouter un rate limiting (non inclus) selon les besoins.
+
+Bon jeu !
